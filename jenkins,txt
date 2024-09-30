@@ -1,0 +1,78 @@
+pipeline {
+    agent any
+
+    environment {
+        // Docker Hub credentials (set in Jenkins credentials)
+        DOCKER_HUB_CREDENTIALS = credentials('dockerhub-credentials-id')
+        // GitHub credentials (set in Jenkins credentials)
+        GITHUB_CREDENTIALS = credentials('github-credentials-id')
+        // Docker Image information
+        DOCKER_IMAGE = "yourdockerhubusername/your-image-name"
+        // Git repository URL
+        GIT_REPO_URL = 'https://github.com/your-username/your-repo.git'
+        // Git branch to push the changes to
+        GIT_BRANCH = 'main'
+    }
+
+    stages {
+        stage('Clone Repository') {
+            steps {
+                // Cloning the repository
+                git branch: env.GIT_BRANCH, url: env.GIT_REPO_URL, credentialsId: env.GITHUB_CREDENTIALS
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    // Building the Docker image
+                    sh "docker build -t ${DOCKER_IMAGE}:latest ."
+                }
+            }
+        }
+
+        stage('Login to Docker Hub') {
+            steps {
+                script {
+                    // Login to Docker Hub
+                    sh "echo ${DOCKER_HUB_CREDENTIALS_PSW} | docker login -u ${DOCKER_HUB_CREDENTIALS_USR} --password-stdin"
+                }
+            }
+        }
+
+        stage('Push Docker Image to Docker Hub') {
+            steps {
+                script {
+                    // Tagging the Docker image
+                    sh "docker tag ${DOCKER_IMAGE}:latest ${DOCKER_IMAGE}:latest"
+                    // Pushing the image to Docker Hub
+                    sh "docker push ${DOCKER_IMAGE}:latest"
+                }
+            }
+        }
+
+        stage('Commit & Push Dockerfile to GitHub') {
+            steps {
+                script {
+                    // Configure git user
+                    sh 'git config user.name "Jenkins"'
+                    sh 'git config user.email "jenkins@example.com"'
+
+                    // Add the updated Dockerfile (assuming changes were made)
+                    sh 'git add Dockerfile'
+                    sh 'git commit -m "Updated Dockerfile and pushed Docker image to Docker Hub"'
+
+                    // Push changes to GitHub
+                    sh "git push https://${GITHUB_CREDENTIALS_USR}:${GITHUB_CREDENTIALS_PSW}@github.com/your-username/your-repo.git ${GIT_BRANCH}"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            // Clean up Docker images after the pipeline runs
+            sh 'docker rmi ${DOCKER_IMAGE}:latest'
+        }
+    }
+}
